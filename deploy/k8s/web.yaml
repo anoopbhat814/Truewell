@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: truewell-web
+  namespace: truewell
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: truewell-web }
+  template:
+    metadata:
+      labels: { app: truewell-web }
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/your-org/truewell-web:latest
+          ports: [{ containerPort: 3000 }]
+          env:
+            - { name: TRUEWELL_API_URL, value: "http://truewell-api:8000" }
+          readinessProbe: { httpGet: { path: /api/health, port: 3000 } }
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { cpu: "1", memory: 768Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: truewell-web
+  namespace: truewell
+spec:
+  selector: { app: truewell-web }
+  ports: [{ port: 80, targetPort: 3000 }]

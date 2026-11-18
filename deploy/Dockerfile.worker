@@ -1,0 +1,11 @@
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package.json package-lock.json* ./
+COPY apps/worker/package.json apps/worker/
+RUN npm ci --workspace apps/worker --include-workspace-root --omit=dev
+COPY prisma ./prisma
+RUN npx prisma generate
+COPY apps/worker ./apps/worker
+USER node
+CMD ["node", "apps/worker/src/index.js"]

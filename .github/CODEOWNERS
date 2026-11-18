@@ -1,0 +1,7 @@
+*                      @truewell/maintainers
+/apps/web/             @truewell/web
+/apps/worker/          @truewell/platform
+/services/api/         @truewell/backend
+/services/notifier/    @truewell/platform
+/prisma/               @truewell/maintainers
+/docs/security.md      @truewell/security

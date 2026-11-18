@@ -1,0 +1,33 @@
+name: Bug report
+description: Something is not working as expected
+labels: [bug, triage]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead. Never include real patient information.
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: "Example: 1. Sign in as a patient. 2. Open /portal/appointments. 3. Click Request appointment."
+    validations: { required: true }
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Patient portal, Clinician dashboard, API, Notifier, Worker, Database, CI / deploy]
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: "For example v0.6.0"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Redact tokens, identifiers and personal data.
+      render: shell

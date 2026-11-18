@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: truewell-notifier
+  namespace: truewell
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: truewell-notifier }
+  template:
+    metadata:
+      labels: { app: truewell-notifier }
+    spec:
+      containers:
+        - name: notifier
+          image: ghcr.io/your-org/truewell-notifier:latest
+          ports: [{ containerPort: 8090 }]
+          env:
+            - name: NOTIFIER_API_TOKEN
+              valueFrom: { secretKeyRef: { name: truewell-notifier-secrets, key: token } }
+          readinessProbe: { httpGet: { path: /healthz, port: 8090 } }
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { cpu: 250m, memory: 96Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: truewell-notifier
+  namespace: truewell
+spec:
+  selector: { app: truewell-notifier }
+  ports: [{ port: 8090, targetPort: 8090 }]

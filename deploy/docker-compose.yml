@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: truewell
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: truewell
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U truewell"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+  api:
+    build: { context: ../services/api }
+    env_file: ../.env
+    environment:
+      TRUEWELL_DATABASE_URL: postgresql+psycopg://truewell:changeme@postgres:5432/truewell
+      TRUEWELL_NOTIFIER_URL: http://notifier:8090
+    depends_on: { postgres: { condition: service_healthy }, notifier: { condition: service_started } }
+    ports: ["8000:8000"]
+  tasks:
+    build: { context: ../services/api }
+    command: ["python", "-m", "app.tasks"]
+    env_file: ../.env
+    environment:
+      TRUEWELL_DATABASE_URL: postgresql+psycopg://truewell:changeme@postgres:5432/truewell
+      TRUEWELL_NOTIFIER_URL: http://notifier:8090
+    depends_on: [api]
+  notifier:
+    build: { context: ../services/notifier }
+    env_file: ../.env
+    ports: ["8090:8090"]
+  web:
+    build: { context: .., dockerfile: deploy/Dockerfile.web }
+    env_file: ../.env
+    environment:
+      TRUEWELL_API_URL: http://api:8000
+    depends_on: [api]
+    ports: ["3000:3000"]
+  worker:
+    build: { context: .., dockerfile: deploy/Dockerfile.worker }
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://truewell:changeme@postgres:5432/truewell
+      REDIS_URL: redis://redis:6379/0
+      NOTIFIER_URL: http://notifier:8090
+    depends_on: [postgres, redis, notifier]
+volumes:
+  pgdata:

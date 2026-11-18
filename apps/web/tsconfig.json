@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "next" }],
+    "incremental": true,
+    "noEmit": true,
+    "allowJs": true,
+    "isolatedModules": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@truewell/types": ["../../packages/types/src"],
+      "@truewell/utils": ["../../packages/utils/src"],
+      "@truewell/ui": ["../../packages/ui/src"],
+      "@truewell/api-client": ["../../packages/api-client/src"]
+    }
+  },
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

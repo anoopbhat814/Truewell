@@ -1,0 +1,75 @@
+"""Aggregate API router mounted under /api/v1."""
+
+from fastapi import APIRouter
+
+from app.routers import (
+    auth,
+    health,
+    scheduling,
+    users,
+    allergy,
+    appointment,
+    appointment_type,
+    availability_slot,
+    care_plan,
+    care_plan_goal,
+    care_plan_task,
+    claim,
+    claim_line,
+    clinician,
+    document,
+    insurance_policy,
+    lab_order,
+    lab_result,
+    location,
+    medication,
+    message,
+    message_attachment,
+    message_thread,
+    notification,
+    organization,
+    patient,
+    pharmacy,
+    prescription,
+    reminder,
+    telehealth_participant,
+    telehealth_session,
+)
+
+api_router = APIRouter()
+
+for module in (
+    auth,
+    users,
+    scheduling,
+    patient,
+    clinician,
+    organization,
+    location,
+    appointment_type,
+    availability_slot,
+    appointment,
+    telehealth_session,
+    telehealth_participant,
+    medication,
+    pharmacy,
+    prescription,
+    allergy,
+    lab_order,
+    lab_result,
+    care_plan,
+    care_plan_goal,
+    care_plan_task,
+    message_thread,
+    message,
+    message_attachment,
+    document,
+    insurance_policy,
+    claim,
+    claim_line,
+    reminder,
+    notification,
+):
+    api_router.include_router(module.router)
+
+__all__ = ["api_router", "health"]

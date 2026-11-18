@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: truewell-api
+  namespace: truewell
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: truewell-api }
+  template:
+    metadata:
+      labels: { app: truewell-api }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10001 }
+      containers:
+        - name: api
+          image: ghcr.io/your-org/truewell-api:latest
+          ports: [{ containerPort: 8000 }]
+          envFrom:
+            - secretRef: { name: truewell-api-secrets }
+          env:
+            - { name: TRUEWELL_ENVIRONMENT, value: production }
+            - { name: TRUEWELL_NOTIFIER_URL, value: "http://truewell-notifier:8090" }
+          readinessProbe: { httpGet: { path: /readyz, port: 8000 }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: 8000 }, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: truewell-api
+  namespace: truewell
+spec:
+  selector: { app: truewell-api }
+  ports: [{ port: 8000, targetPort: 8000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: truewell-tasks
+  namespace: truewell
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: truewell-tasks }
+  template:
+    metadata:
+      labels: { app: truewell-tasks }
+    spec:
+      containers:
+        - name: tasks
+          image: ghcr.io/your-org/truewell-api:latest
+          command: ["python", "-m", "app.tasks"]
+          envFrom:
+            - secretRef: { name: truewell-api-secrets }

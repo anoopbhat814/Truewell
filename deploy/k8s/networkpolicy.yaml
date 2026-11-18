@@ -1,0 +1,29 @@
+# The API and notifier accept traffic only from within the namespace's own workloads.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-ingress
+  namespace: truewell
+spec:
+  podSelector:
+    matchLabels: { app: truewell-api }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: truewell-web } }
+      ports: [{ port: 8000 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notifier-ingress
+  namespace: truewell
+spec:
+  podSelector:
+    matchLabels: { app: truewell-notifier }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: truewell-api } }
+        - podSelector: { matchLabels: { app: truewell-tasks } }
+      ports: [{ port: 8090 }]

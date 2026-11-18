@@ -1,0 +1,8 @@
+/** @type {import('prettier').Config} */
+module.exports = {
+  singleQuote: true,
+  trailingComma: 'all',
+  printWidth: 120,
+  semi: true,
+  overrides: [{ files: '*.md', options: { proseWrap: 'preserve' } }],
+};

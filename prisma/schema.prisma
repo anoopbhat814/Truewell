@@ -1,0 +1,642 @@
+// Truewell data model. Table names are snake_case via @@map; Prisma models are PascalCase.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  CLINICIAN
+  NURSE
+  FRONT_DESK
+  BILLING
+  ADMIN
+}
+
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AppointmentMode {
+  IN_PERSON
+  VIDEO
+  PHONE
+}
+
+enum SessionStatus {
+  SCHEDULED
+  WAITING_ROOM
+  LIVE
+  ENDED
+  FAILED
+}
+
+enum PrescriptionStatus {
+  DRAFT
+  SENT
+  FILLED
+  CANCELLED
+  EXPIRED
+}
+
+enum LabStatus {
+  ORDERED
+  COLLECTED
+  IN_PROCESS
+  RESULTED
+  CANCELLED
+}
+
+enum AbnormalFlag {
+  NORMAL
+  LOW
+  HIGH
+  CRITICAL_LOW
+  CRITICAL_HIGH
+}
+
+enum CarePlanStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  REVOKED
+}
+
+enum ClaimStatus {
+  DRAFT
+  SUBMITTED
+  ACCEPTED
+  DENIED
+  PAID
+  APPEALED
+}
+
+enum ReminderChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum NotificationKind {
+  APPOINTMENT
+  LAB_RESULT
+  MESSAGE
+  PRESCRIPTION
+  BILLING
+  SYSTEM
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(PATIENT)
+  displayName  String    @map("display_name")
+  mfaEnabled   Boolean   @default(false) @map("mfa_enabled")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  patient       Patient?
+  clinician     Clinician?
+  sessions      Session[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  messages      Message[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  userAgent String?  @map("user_agent")
+  ipAddress String?  @map("ip_address")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  npi       String?  @unique
+  timezone  String   @default("America/New_York")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  locations  Location[]
+  clinicians Clinician[]
+
+  @@map("organizations")
+}
+
+model Location {
+  id             String  @id @default(cuid())
+  organizationId String  @map("organization_id")
+  name           String
+  addressLine1   String  @map("address_line1")
+  city           String
+  region         String
+  postalCode     String  @map("postal_code")
+  phone          String?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([organizationId])
+  @@map("locations")
+}
+
+model Patient {
+  id            String    @id @default(cuid())
+  userId        String    @unique @map("user_id")
+  mrn           String    @unique
+  firstName     String    @map("first_name")
+  lastName      String    @map("last_name")
+  dateOfBirth   DateTime  @map("date_of_birth") @db.Date
+  sexAtBirth    String?   @map("sex_at_birth")
+  phone         String?
+  preferredLang String    @default("en") @map("preferred_lang")
+  primaryClinicianId String? @map("primary_clinician_id")
+  deactivatedAt DateTime? @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryClinician Clinician?        @relation("PrimaryClinician", fields: [primaryClinicianId], references: [id])
+  appointments     Appointment[]
+  prescriptions    Prescription[]
+  labOrders        LabOrder[]
+  carePlans        CarePlan[]
+  allergies        Allergy[]
+  policies         InsurancePolicy[]
+  claims           Claim[]
+  reminders        Reminder[]
+  threads          MessageThread[]
+  documents        Document[]
+
+  @@index([lastName, firstName])
+  @@index([primaryClinicianId])
+  @@map("patients")
+}
+
+model Clinician {
+  id             String  @id @default(cuid())
+  userId         String  @unique @map("user_id")
+  organizationId String  @map("organization_id")
+  npi            String  @unique
+  specialty      String
+  title          String?
+  acceptingNew   Boolean @default(true) @map("accepting_new")
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  patients     Patient[]      @relation("PrimaryClinician")
+  appointments Appointment[]
+  slots        AvailabilitySlot[]
+  prescriptions Prescription[]
+  labOrders    LabOrder[]
+  carePlans    CarePlan[]
+  threads      MessageThread[]
+
+  @@index([organizationId, specialty])
+  @@map("clinicians")
+}
+
+model AppointmentType {
+  id              String  @id @default(cuid())
+  code            String  @unique
+  label           String
+  durationMinutes Int     @map("duration_minutes")
+  telehealthOk    Boolean @default(true) @map("telehealth_ok")
+  priceCents      Int     @default(0) @map("price_cents")
+
+  appointments Appointment[]
+
+  @@map("appointment_types")
+}
+
+model AvailabilitySlot {
+  id          String   @id @default(cuid())
+  clinicianId String   @map("clinician_id")
+  startsAt    DateTime @map("starts_at")
+  endsAt      DateTime @map("ends_at")
+  isBooked    Boolean  @default(false) @map("is_booked")
+
+  clinician Clinician @relation(fields: [clinicianId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicianId, startsAt])
+  @@index([startsAt, isBooked])
+  @@map("availability_slots")
+}
+
+model Appointment {
+  id            String            @id @default(cuid())
+  patientId     String            @map("patient_id")
+  clinicianId   String            @map("clinician_id")
+  typeId        String            @map("type_id")
+  locationId    String?           @map("location_id")
+  status        AppointmentStatus @default(REQUESTED)
+  mode          AppointmentMode   @default(IN_PERSON)
+  startsAt      DateTime          @map("starts_at")
+  endsAt        DateTime          @map("ends_at")
+  reason        String?
+  cancelReason  String?           @map("cancel_reason")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  patient   Patient          @relation(fields: [patientId], references: [id])
+  clinician Clinician        @relation(fields: [clinicianId], references: [id])
+  type      AppointmentType  @relation(fields: [typeId], references: [id])
+  location  Location?        @relation(fields: [locationId], references: [id])
+  session   TelehealthSession?
+  reminders Reminder[]
+  claims    Claim[]
+
+  @@index([patientId, startsAt])
+  @@index([clinicianId, startsAt])
+  @@index([status])
+  @@map("appointments")
+}
+
+model TelehealthSession {
+  id            String        @id @default(cuid())
+  appointmentId String        @unique @map("appointment_id")
+  roomName      String        @unique @map("room_name")
+  status        SessionStatus @default(SCHEDULED)
+  startedAt     DateTime?     @map("started_at")
+  endedAt       DateTime?     @map("ended_at")
+  recordingConsent Boolean    @default(false) @map("recording_consent")
+
+  appointment  Appointment               @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  participants TelehealthParticipant[]
+
+  @@index([status])
+  @@map("telehealth_sessions")
+}
+
+model TelehealthParticipant {
+  id         String    @id @default(cuid())
+  sessionId  String    @map("session_id")
+  userId     String    @map("user_id")
+  role       Role
+  joinedAt   DateTime? @map("joined_at")
+  leftAt     DateTime? @map("left_at")
+  connectionQuality Int? @map("connection_quality")
+
+  session TelehealthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@map("telehealth_participants")
+}
+
+model Medication {
+  id          String  @id @default(cuid())
+  rxnormCode  String  @unique @map("rxnorm_code")
+  name        String
+  strength    String?
+  form        String?
+  isControlled Boolean @default(false) @map("is_controlled")
+
+  prescriptions Prescription[]
+
+  @@index([name])
+  @@map("medications")
+}
+
+model Pharmacy {
+  id       String  @id @default(cuid())
+  name     String
+  ncpdpId  String  @unique @map("ncpdp_id")
+  phone    String?
+  city     String
+  region   String
+
+  prescriptions Prescription[]
+
+  @@map("pharmacies")
+}
+
+model Prescription {
+  id           String             @id @default(cuid())
+  patientId    String             @map("patient_id")
+  clinicianId  String             @map("clinician_id")
+  medicationId String             @map("medication_id")
+  pharmacyId   String?            @map("pharmacy_id")
+  status       PrescriptionStatus @default(DRAFT)
+  dosage       String
+  frequency    String
+  quantity     Int
+  refills      Int                @default(0)
+  instructions String?
+  issuedAt     DateTime?          @map("issued_at")
+  expiresAt    DateTime?          @map("expires_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  patient    Patient    @relation(fields: [patientId], references: [id])
+  clinician  Clinician  @relation(fields: [clinicianId], references: [id])
+  medication Medication @relation(fields: [medicationId], references: [id])
+  pharmacy   Pharmacy?  @relation(fields: [pharmacyId], references: [id])
+
+  @@index([patientId, status])
+  @@index([clinicianId])
+  @@map("prescriptions")
+}
+
+model Allergy {
+  id         String   @id @default(cuid())
+  patientId  String   @map("patient_id")
+  substance  String
+  reaction   String?
+  severity   String   @default("moderate")
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, substance])
+  @@map("allergies")
+}
+
+model LabOrder {
+  id          String    @id @default(cuid())
+  patientId   String    @map("patient_id")
+  clinicianId String    @map("clinician_id")
+  status      LabStatus @default(ORDERED)
+  panelCode   String    @map("panel_code")
+  orderedAt   DateTime  @default(now()) @map("ordered_at")
+  collectedAt DateTime? @map("collected_at")
+
+  patient   Patient     @relation(fields: [patientId], references: [id])
+  clinician Clinician   @relation(fields: [clinicianId], references: [id])
+  results   LabResult[]
+
+  @@index([patientId, status])
+  @@map("lab_orders")
+}
+
+model LabResult {
+  id           String       @id @default(cuid())
+  orderId      String       @map("order_id")
+  analyte      String
+  loincCode    String?      @map("loinc_code")
+  value        Decimal      @db.Decimal(12, 4)
+  unit         String
+  refLow       Decimal?     @map("ref_low") @db.Decimal(12, 4)
+  refHigh      Decimal?     @map("ref_high") @db.Decimal(12, 4)
+  flag         AbnormalFlag @default(NORMAL)
+  resultedAt   DateTime     @default(now()) @map("resulted_at")
+  releasedToPatient Boolean @default(false) @map("released_to_patient")
+
+  order LabOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([analyte, resultedAt])
+  @@map("lab_results")
+}
+
+model CarePlan {
+  id          String         @id @default(cuid())
+  patientId   String         @map("patient_id")
+  clinicianId String         @map("clinician_id")
+  title       String
+  status      CarePlanStatus @default(DRAFT)
+  startsOn    DateTime       @map("starts_on") @db.Date
+  endsOn      DateTime?      @map("ends_on") @db.Date
+  summary     String?
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  patient   Patient        @relation(fields: [patientId], references: [id])
+  clinician Clinician      @relation(fields: [clinicianId], references: [id])
+  goals     CarePlanGoal[]
+  tasks     CarePlanTask[]
+
+  @@index([patientId, status])
+  @@map("care_plans")
+}
+
+model CarePlanGoal {
+  id          String    @id @default(cuid())
+  carePlanId  String    @map("care_plan_id")
+  description String
+  metric      String?
+  targetValue Decimal?  @map("target_value") @db.Decimal(12, 4)
+  targetDate  DateTime? @map("target_date") @db.Date
+  achievedAt  DateTime? @map("achieved_at")
+
+  carePlan CarePlan @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+
+  @@index([carePlanId])
+  @@map("care_plan_goals")
+}
+
+model CarePlanTask {
+  id          String    @id @default(cuid())
+  carePlanId  String    @map("care_plan_id")
+  title       String
+  assignee    Role      @default(PATIENT)
+  dueOn       DateTime? @map("due_on") @db.Date
+  completedAt DateTime? @map("completed_at")
+
+  carePlan CarePlan @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+
+  @@index([carePlanId, completedAt])
+  @@map("care_plan_tasks")
+}
+
+model MessageThread {
+  id          String   @id @default(cuid())
+  patientId   String   @map("patient_id")
+  clinicianId String?  @map("clinician_id")
+  subject     String
+  archived    Boolean  @default(false)
+  lastMessageAt DateTime @default(now()) @map("last_message_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  patient   Patient    @relation(fields: [patientId], references: [id])
+  clinician Clinician? @relation(fields: [clinicianId], references: [id])
+  messages  Message[]
+
+  @@index([patientId, lastMessageAt])
+  @@index([clinicianId, lastMessageAt])
+  @@map("message_threads")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String   @map("thread_id")
+  senderId  String   @map("sender_id")
+  body      String
+  readAt    DateTime? @map("read_at")
+  sentAt    DateTime @default(now()) @map("sent_at")
+
+  thread      MessageThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender      User                @relation(fields: [senderId], references: [id])
+  attachments MessageAttachment[]
+
+  @@index([threadId, sentAt])
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id        String @id @default(cuid())
+  messageId String @map("message_id")
+  fileName  String @map("file_name")
+  mimeType  String @map("mime_type")
+  sizeBytes Int    @map("size_bytes")
+  storageKey String @unique @map("storage_key")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("message_attachments")
+}
+
+model Document {
+  id         String   @id @default(cuid())
+  patientId  String   @map("patient_id")
+  title      String
+  category   String
+  storageKey String   @unique @map("storage_key")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, category])
+  @@map("documents")
+}
+
+model InsurancePolicy {
+  id           String    @id @default(cuid())
+  patientId    String    @map("patient_id")
+  payerName    String    @map("payer_name")
+  memberId     String    @map("member_id")
+  groupNumber  String?   @map("group_number")
+  planType     String    @map("plan_type")
+  copayCents   Int       @default(0) @map("copay_cents")
+  deductibleCents Int    @default(0) @map("deductible_cents")
+  effectiveOn  DateTime  @map("effective_on") @db.Date
+  terminatesOn DateTime? @map("terminates_on") @db.Date
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  claims  Claim[]
+
+  @@unique([payerName, memberId])
+  @@index([patientId])
+  @@map("insurance_policies")
+}
+
+model Claim {
+  id            String      @id @default(cuid())
+  patientId     String      @map("patient_id")
+  policyId      String      @map("policy_id")
+  appointmentId String?     @map("appointment_id")
+  status        ClaimStatus @default(DRAFT)
+  totalCents    Int         @map("total_cents")
+  allowedCents  Int?        @map("allowed_cents")
+  paidCents     Int?        @map("paid_cents")
+  denialCode    String?     @map("denial_code")
+  submittedAt   DateTime?   @map("submitted_at")
+  adjudicatedAt DateTime?   @map("adjudicated_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  patient     Patient         @relation(fields: [patientId], references: [id])
+  policy      InsurancePolicy @relation(fields: [policyId], references: [id])
+  appointment Appointment?    @relation(fields: [appointmentId], references: [id])
+  lines       ClaimLine[]
+
+  @@index([patientId, status])
+  @@index([status, submittedAt])
+  @@map("claims")
+}
+
+model ClaimLine {
+  id         String @id @default(cuid())
+  claimId    String @map("claim_id")
+  cptCode    String @map("cpt_code")
+  icd10Code  String @map("icd10_code")
+  units      Int    @default(1)
+  chargeCents Int   @map("charge_cents")
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
+  @@map("claim_lines")
+}
+
+model Reminder {
+  id            String          @id @default(cuid())
+  patientId     String          @map("patient_id")
+  appointmentId String?         @map("appointment_id")
+  channel       ReminderChannel
+  status        ReminderStatus  @default(PENDING)
+  message       String
+  sendAt        DateTime        @map("send_at")
+  sentAt        DateTime?       @map("sent_at")
+  attempts      Int             @default(0)
+  lastError     String?         @map("last_error")
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([status, sendAt])
+  @@index([patientId])
+  @@map("reminders")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  kind      NotificationKind
+  title     String
+  body      String
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  @map("actor_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  ipAddress  String?  @map("ip_address")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
